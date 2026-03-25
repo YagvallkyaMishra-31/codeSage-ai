@@ -2,7 +2,18 @@
 
 CodeSage AI is an advanced debugging assistant that uses **Retrieval-Augmented Generation (RAG)** to provide deep insights into your codebase. It analyzes your repository context to identify root causes and suggest actionable fixes for complex bugs.
 
-## 🚀 Now Fully Offline with Ollama
+## 🏗️ Architecture
+
+```mermaid
+graph LR
+  A[React Frontend <br/> Vercel] -->|REST API| B(FastAPI Backend <br/> Render)
+  B -->|Vector Search| C[(FAISS <br/> Local Storage)]
+  B -->|LLM Inference| D[Groq API <br/> llama3-70b-8192]
+  D -.->|JSON Response| B
+  B -.->|Debug Results| A
+```
+
+## 🚀 Cloud Deployment Ready
 
 CodeSage AI now supports **local LLM inference using Ollama**, allowing you to work completely offline without worrying about OpenAI quota limits or API costs.
 

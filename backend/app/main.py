@@ -14,6 +14,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
+from app.config import CORS_ORIGINS
 from app.database.db import init_db
 from app.api.repo_routes import router as repo_router
 from app.api.search_routes import router as search_router
@@ -36,10 +37,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS (allow frontend at localhost:5173) ──
+# ── Dynamic CORS Configuration ──
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

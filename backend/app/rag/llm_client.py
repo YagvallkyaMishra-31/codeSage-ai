@@ -1,27 +1,68 @@
 """
-LLM client using Ollama for local inference.
-Calls Ollama's /api/generate endpoint and handles response parsing.
+LLM client using Groq API for cloud inference.
+Calls Groq with llama3-70b-8192 and handles response parsing.
 """
 import os
 import re
 import json
 import logging
-import requests
 import asyncio
 from dotenv import load_dotenv
+from groq import AsyncGroq, GroqError
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+# Enforce GROQ_API_KEY for cloud deployment
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = "llama3-70b-8192"
+
+if not GROQ_API_KEY:
+    logger.warning("GROQ_API_KEY is not set. LLM features will fail in production.")
+
+# Initialize global AsyncGroq client
+groq_client = AsyncGroq(api_key=GROQ_API_KEY)
+
+
+async def generate_response(prompt: str) -> str:
+    """
+    Core function to communicate with Groq LLM API.
+    
+    Args:
+        prompt: Raw prompt text string.
+        
+    Returns:
+        Generated text response from the model.
+    """
+    if not GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY is missing. Please configure it in the environment variables.")
+
+    try:
+        logger.info("Sending request to Groq SDK (model=%s)", GROQ_MODEL)
+        
+        response = await groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=GROQ_MODEL,
+            temperature=0.2,
+            max_tokens=2048,
+        )
+        
+        content = response.choices[0].message.content
+        logger.info("Groq response received (%d chars)", len(content))
+        return content
+
+    except GroqError as e:
+        logger.error("Groq API request failed: %s", str(e))
+        raise RuntimeError(f"Cloud LLM inference failed: {str(e)}")
+    except Exception as e:
+        logger.error("Unexpected error during Groq generation: %s", str(e))
+        raise
 
 
 async def analyze_debug_issue(messages: list[dict]) -> dict:
     """
-    Send a prompt to Ollama and return the parsed JSON response.
+    Send formatted messages to Groq and return the parsed JSON response.
 
     Args:
         messages: Chat-format messages from prompt_builder
@@ -29,10 +70,7 @@ async def analyze_debug_issue(messages: list[dict]) -> dict:
     Returns:
         Parsed dict with root_cause, explanation, suggested_fix, etc.
     """
-    # Ollama /api/generate expects a single prompt string, or we can use /api/chat.
-    # The requirement specifically mentioned /api/generate with "prompt" field.
-    # Let's convert the messages list to a single prompt string for /api/generate.
-    
+    # Convert prompt builder messages to a single strong prompt for the prompt arg
     prompt_parts = []
     for msg in messages:
         role = msg["role"].upper()
@@ -41,46 +79,15 @@ async def analyze_debug_issue(messages: list[dict]) -> dict:
     
     full_prompt = "\n".join(prompt_parts) + "\n### RESPONSE (JSON ONLY)\n"
 
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": full_prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0.3
-        }
-    }
-
-    logger.info("Sending LLM request to %s (model=%s)", OLLAMA_URL, OLLAMA_MODEL)
-
     try:
-        # Run synchronous request in executor to avoid blocking the event loop
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: requests.post(
-                f"{OLLAMA_URL}/api/generate",
-                json=payload,
-                timeout=180
-            )
-        )
+        # Generate the raw text response via Groq
+        content = await generate_response(full_prompt)
         
-        if response.status_code != 200:
-            logger.error("Ollama returned status %d: %s", response.status_code, response.text[:200])
-            raise ValueError(f"Ollama error: {response.text}")
-            
-        data = response.json()
-        content = data.get("response", "").strip()
-        logger.info("LLM response received (%d chars)", len(content))
-        
-    except requests.exceptions.ConnectionError:
-        logger.error("Cannot connect to Ollama at %s", OLLAMA_URL)
-        raise ConnectionError("Local LLM service unavailable. Start Ollama.")
     except Exception as e:
-        logger.error("Ollama request failed: %s", e)
-        raise RuntimeError(f"Ollama analysis failed: {str(e)}")
+        raise RuntimeError(f"Analysis failed: {str(e)}")
 
     # ── Robust JSON extraction ──
-    json_str = content
+    json_str = content.strip()
 
     # Strip markdown code fences
     if "```json" in content:
@@ -95,10 +102,9 @@ async def analyze_debug_issue(messages: list[dict]) -> dict:
         json_str = json_str[start:end + 1]
 
     # Fix unescaped backslashes (e.g. server\controllers\app.js)
-    # Replace single backslashes that aren't valid JSON escapes
     json_str = re.sub(
-        r'\\(?!["\\/bfnrtu])',   # backslash NOT followed by valid JSON escape char
-        r'/',                     # replace with forward slash
+        r'\\(?!["\\/bfnrtu])',
+        r'/',
         json_str,
     )
 

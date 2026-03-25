@@ -10,6 +10,13 @@ DB_PATH = BASE_DIR / "data" / "codesage.db"
 REPOS_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+# ── Dynamic Environment Variables ──
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# Parse CORS origins from a comma-separated string
+raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
+CORS_ORIGINS = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
 # ── Allowed Code Extensions ──
 ALLOWED_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx",
