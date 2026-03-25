@@ -218,6 +218,10 @@ async def _call_llm_with_retry(prompt: str, retries: int = MAX_RETRIES) -> str:
         except Exception as e:
             last_error = str(e)
             logger.warning("  ✗ LLM error (attempt %d/%d): %s", attempt, retries, str(e))
+            if "RATE_LIMIT_EXCEEDED" in str(e):
+                logger.error("  🚨 Groq Rate Limit Exceeded! Fast-failing analysis.")
+                raise RuntimeError("RATE_LIMIT_EXCEEDED")
+            
         if attempt < retries:
             await asyncio.sleep(2 ** attempt)
 
@@ -347,6 +351,7 @@ async def run_analysis_pipeline(repo_id: int):
         all_issues = []
         seen_hashes = set()
         batches_processed = 0
+        rate_limit_hit = False
 
         for batch_start in range(0, len(chunks), BATCH_SIZE):
             batch = chunks[batch_start:batch_start + BATCH_SIZE]
@@ -394,6 +399,9 @@ async def run_analysis_pipeline(repo_id: int):
 
             except Exception as e:
                 logger.error("  ✗ Batch %d failed: %s", batches_processed, str(e))
+                if "RATE_LIMIT_EXCEEDED" in str(e):
+                    rate_limit_hit = True
+                    break
                 continue
 
             await asyncio.sleep(0.5)  # Rate limiting for Groq
@@ -402,7 +410,7 @@ async def run_analysis_pipeline(repo_id: int):
                      len(all_issues), batches_processed)
 
         # ── PHASE 2: Improvement Mode (if Phase 1 found < 3 issues) ──
-        if len(all_issues) < 3:
+        if len(all_issues) < 3 and not rate_limit_hit:
             logger.info("─" * 40)
             logger.info("💡 PHASE 2: Improvement Mode (Phase 1 found only %d issues)", len(all_issues))
             logger.info("─" * 40)
@@ -450,13 +458,17 @@ async def run_analysis_pipeline(repo_id: int):
 
                 except Exception as e:
                     logger.error("  ✗ Improvement scan failed for %s: %s", fp, str(e))
+                    if "RATE_LIMIT_EXCEEDED" in str(e):
+                        rate_limit_hit = True
+                        break
 
                 await asyncio.sleep(0.5)
 
             logger.info("💡 Phase 2 complete: total issues now %d", len(all_issues))
 
         # ── PHASE 3: Cross-File Architecture Analysis ──
-        logger.info("─" * 40)
+        if not rate_limit_hit:
+            logger.info("─" * 40)
         logger.info("🏗️ PHASE 3: Cross-File Architecture Analysis")
         logger.info("─" * 40)
 
@@ -511,6 +523,8 @@ async def run_analysis_pipeline(repo_id: int):
 
         except Exception as e:
             logger.warning("  ⚠ Architecture analysis failed: %s", str(e))
+            if "RATE_LIMIT_EXCEEDED" in str(e):
+                rate_limit_hit = True
 
         # ── Store issues in DB ──
         logger.info("─" * 40)
@@ -558,7 +572,9 @@ async def run_analysis_pipeline(repo_id: int):
         total = critical + high + medium + low
 
         # Smart summary message
-        if critical > 0 or high > 0:
+        if rate_limit_hit:
+            summary = f"⚠️ Analysis paused: Groq AI Rate Limit Exceeded. Found {total} issues so far."
+        elif critical > 0 or high > 0:
             summary = f"AI found {total} issues ({critical} critical, {high} high priority)"
         elif total > 0:
             summary = f"✅ No critical issues! Found {total} improvements to strengthen your code"

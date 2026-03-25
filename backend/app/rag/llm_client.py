@@ -42,7 +42,8 @@ async def generate_response(prompt: str) -> str:
     # Re-initialize client if the key was updated
     global groq_client
     if current_key and groq_client.api_key == "dummy_key_to_prevent_crash":
-        groq_client = AsyncGroq(api_key=current_key)
+        # Using max_retries=0 so we handle rate limit backoffs explicitly instead of hanging
+        groq_client = AsyncGroq(api_key=current_key, max_retries=0)
 
     try:
         logger.info("Sending request to Groq SDK (model=%s)", GROQ_MODEL)
@@ -60,6 +61,8 @@ async def generate_response(prompt: str) -> str:
 
     except GroqError as e:
         logger.error("Groq API request failed: %s", str(e))
+        if "429" in str(e) or "rate limit" in str(e).lower():
+            raise RuntimeError("RATE_LIMIT_EXCEEDED")
         raise RuntimeError(f"Cloud LLM inference failed: {str(e)}")
     except Exception as e:
         logger.error("Unexpected error during Groq generation: %s", str(e))
