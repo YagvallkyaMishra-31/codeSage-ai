@@ -21,9 +21,8 @@ GROQ_MODEL = "llama3-70b-8192"
 if not GROQ_API_KEY:
     logger.warning("GROQ_API_KEY is not set. LLM features will fail in production.")
 
-# Initialize global AsyncGroq client
-groq_client = AsyncGroq(api_key=GROQ_API_KEY)
-
+# Initialize global AsyncGroq client safely
+groq_client = AsyncGroq(api_key=GROQ_API_KEY if GROQ_API_KEY else "dummy_key_to_prevent_crash")
 
 async def generate_response(prompt: str) -> str:
     """
@@ -35,8 +34,15 @@ async def generate_response(prompt: str) -> str:
     Returns:
         Generated text response from the model.
     """
-    if not GROQ_API_KEY:
+    # Reload key dynamically in case it was added to .env after server start
+    current_key = os.getenv("GROQ_API_KEY")
+    if not current_key:
         raise ValueError("GROQ_API_KEY is missing. Please configure it in the environment variables.")
+        
+    # Re-initialize client if the key was updated
+    global groq_client
+    if current_key and groq_client.api_key == "dummy_key_to_prevent_crash":
+        groq_client = AsyncGroq(api_key=current_key)
 
     try:
         logger.info("Sending request to Groq SDK (model=%s)", GROQ_MODEL)
