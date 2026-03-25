@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+
+# Data & Models
+backend/data/
+backend/repos/
+backend/vector_db/
+backend/audit_results.txt
+backend/test_audit.py
+backend/test_fixes.py
+backend/test_repo_indexing_status.py
+backend/run_audit.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
