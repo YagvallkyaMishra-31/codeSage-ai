@@ -32,4 +32,11 @@ export const activityAPI = {
   getById: (id) => api.get(`/activity/${id}`),
 }
 
+// Analysis endpoints
+export const analysisAPI = {
+  getIssues: (repoId, params) => api.get(`/repository/${repoId}/issues`, { params }),
+  getFiles: (repoId) => api.get(`/repository/${repoId}/files`),
+  getSummary: (repoId) => api.get(`/repository/${repoId}/summary`),
+}
+
 export default api

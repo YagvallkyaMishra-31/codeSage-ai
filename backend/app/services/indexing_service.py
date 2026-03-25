@@ -14,6 +14,7 @@ from app.rag.chunking import chunk_code
 from app.rag.embeddings import generate_embeddings_batch
 from app.rag.vector_store import add_to_vector_store
 from app.services.code_graph_service import build_code_graph
+from app.services.analysis_service import run_analysis_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,10 @@ async def run_indexing_pipeline(repo_id: int, local_path: str):
             (repo_id,)
         )
         await db.commit()
+
+        # ── Step 6: Trigger AI Analysis Pipeline ──
+        logger.info("Launching autonomous AI analysis for repo_id=%d", repo_id)
+        asyncio.create_task(run_analysis_pipeline(repo_id))
 
     except Exception as e:
         logger.error("Indexing pipeline FAILED for repo_id=%d: %s", repo_id, e)

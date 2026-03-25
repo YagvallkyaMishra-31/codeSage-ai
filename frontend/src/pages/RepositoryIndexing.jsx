@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Link as LinkIcon, MoreVertical, Clock, FolderGit2, Upload,
   Globe, ArrowUpRight, RefreshCw, Trash2, GitBranch, HardDrive,
@@ -37,6 +38,7 @@ export default function RepositoryIndexing() {
   const [activeIndexing, setActiveIndexing] = useState(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState('')
+  const navigate = useNavigate()
 
   // Fetch repositories
   const fetchRepos = useCallback(async () => {
@@ -478,6 +480,7 @@ export default function RepositoryIndexing() {
                       {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'N/A'}
                     </span>
                     <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/repo/${p.id}`) }}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '5px',
                         padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,

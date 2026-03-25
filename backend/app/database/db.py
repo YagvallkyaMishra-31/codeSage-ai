@@ -72,6 +72,41 @@ async def init_db():
                 FOREIGN KEY (repo_id) REFERENCES repositories(id)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS code_issues (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                issue_type TEXT NOT NULL,
+                severity TEXT DEFAULT 'medium',
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                fix_suggestion TEXT,
+                line_start INTEGER,
+                line_end INTEGER,
+                confidence_score REAL DEFAULT 0.8,
+                is_false_positive INTEGER DEFAULT 0,
+                issue_hash TEXT UNIQUE,
+                status TEXT DEFAULT 'open',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id)
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_issues_repo ON code_issues(repo_id)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_issues_severity ON code_issues(repo_id, severity)
+        """)
+        # Add analysis columns to repositories if they don't exist
+        try:
+            await db.execute("ALTER TABLE repositories ADD COLUMN analysis_status TEXT DEFAULT 'pending'")
+        except Exception:
+            pass  # Column already exists
+        try:
+            await db.execute("ALTER TABLE repositories ADD COLUMN summary_message TEXT DEFAULT ''")
+        except Exception:
+            pass  # Column already exists
         await db.commit()
 
 

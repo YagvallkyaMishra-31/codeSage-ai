@@ -5,6 +5,7 @@ import RepositoryIndexing from './pages/RepositoryIndexing'
 import DebugAssistant from './pages/DebugAssistant'
 import RootCauseAnalysis from './pages/RootCauseAnalysis'
 import ActivityHistory from './pages/ActivityHistory'
+import RepoDetail from './pages/RepoDetail'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/debug" element={<DebugAssistant />} />
         <Route path="/analysis" element={<RootCauseAnalysis />} />
         <Route path="/activity" element={<ActivityHistory />} />
+        <Route path="/repo/:id" element={<RepoDetail />} />
         <Route path="/settings" element={<div className="p-10"><h1 className="text-2xl font-semibold" style={{color:'var(--color-text-primary)'}}>Settings</h1><p className="mt-2" style={{color:'var(--color-text-secondary)'}}>Coming soon.</p></div>} />
       </Routes>
     </Layout>
