@@ -126,29 +126,33 @@ export default function RepoDetail() {
       </div>
 
       {/* ── AI Summary Banner ── */}
-      {summary?.total_issues > 0 && (
+      {summary?.analysis_status === 'analyzed' && (
         <div style={{
-          background: 'linear-gradient(135deg, rgba(139,92,246,0.08), rgba(59,130,246,0.08))',
-          border: '1px solid rgba(139,92,246,0.2)',
+          background: (summary?.severity_breakdown?.critical > 0 || summary?.severity_breakdown?.high > 0)
+            ? 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(249,115,22,0.06))'
+            : 'linear-gradient(135deg, rgba(16,185,129,0.06), rgba(59,130,246,0.06))',
+          border: `1px solid ${(summary?.severity_breakdown?.critical > 0 || summary?.severity_breakdown?.high > 0) ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}`,
           borderRadius: '12px', padding: '16px 20px', marginBottom: '16px',
           display: 'flex', alignItems: 'center', gap: '14px',
         }}>
           <Brain style={{ width: '24px', height: '24px', color: '#8b5cf6', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-              🧠 {summary.summary_message}
+              🧠 {summary.summary_message || `AI analyzed your repository and found ${summary.total_issues || 0} items`}
             </p>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-              {Object.entries(summary.severity_breakdown || {}).map(([sev, count]) => {
-                if (!count) return null
-                const cfg = severityConfig[sev]
-                return (
-                  <span key={sev} style={{ fontSize: '12px', fontWeight: 600, color: cfg?.color }}>
-                    {cfg?.icon} {count} {cfg?.label}
-                  </span>
-                )
-              })}
-            </div>
+            {summary?.total_issues > 0 && (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+                {Object.entries(summary.severity_breakdown || {}).map(([sev, count]) => {
+                  if (!count) return null
+                  const cfg = severityConfig[sev]
+                  return (
+                    <span key={sev} style={{ fontSize: '12px', fontWeight: 600, color: cfg?.color }}>
+                      {cfg?.icon} {count} {cfg?.label}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -279,9 +283,20 @@ export default function RepoDetail() {
               </div>
             ) : issues.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>
-                <p style={{ fontSize: '14px' }}>
-                  {isAnalyzing ? '🔍 AI is still analyzing this repository...' : '✅ No issues found!'}
-                </p>
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 style={{ width: '28px', height: '28px', color: 'var(--color-accent)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+                    <p style={{ fontSize: '14px', fontWeight: 500 }}>🔍 AI is deeply analyzing your repository...</p>
+                    <p style={{ fontSize: '12px', marginTop: '4px' }}>This can take 1-3 minutes for large codebases</p>
+                  </>
+                ) : summary?.analysis_status === 'analyzed' ? (
+                  <>
+                    <p style={{ fontSize: '16px', fontWeight: 600, color: '#10b981' }}>✅ No critical issues found</p>
+                    <p style={{ fontSize: '13px', marginTop: '6px' }}>Your code passed the AI's strict analysis. Try clearing filters to see all findings.</p>
+                  </>
+                ) : (
+                  <p style={{ fontSize: '14px' }}>Analysis pending — index the repository to start</p>
+                )}
               </div>
             ) : (
               issues.map((issue) => {
@@ -323,6 +338,14 @@ export default function RepoDetail() {
                       }}>
                         {issue.issue_type}
                       </span>
+                      {issue.confidence_score && (
+                        <span style={{
+                          fontSize: '9px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
+                          background: 'rgba(139,92,246,0.1)', color: '#8b5cf6',
+                        }}>
+                          {Math.round(issue.confidence_score * 100)}%
+                        </span>
+                      )}
                     </div>
 
                     {/* Expanded content */}
