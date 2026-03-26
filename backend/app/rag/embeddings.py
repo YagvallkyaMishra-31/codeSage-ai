@@ -3,16 +3,16 @@ Embedding service using SentenceTransformers.
 Loads the model once and provides a function to generate embeddings.
 """
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 # Load model once at module level (lazy singleton)
 _model = None
 
 
-def _get_model() -> SentenceTransformer:
+def _get_model():
     global _model
     if _model is None:
         print("🔄 Loading embedding model (all-MiniLM-L6-v2)...")
+        from sentence_transformers import SentenceTransformer
         _model = SentenceTransformer("all-MiniLM-L6-v2")
         print("✅ Embedding model loaded")
     return _model

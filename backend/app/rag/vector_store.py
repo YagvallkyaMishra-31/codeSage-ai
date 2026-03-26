@@ -4,7 +4,6 @@ Stores embeddings with metadata for retrieval.
 """
 import os
 import json
-import faiss
 import numpy as np
 from pathlib import Path
 from app.config import BASE_DIR
@@ -34,6 +33,7 @@ def create_vector_store(repo_id: int, chunks: list[dict], embeddings: np.ndarray
     if len(chunks) == 0:
         return
 
+    import faiss
     dim = embeddings.shape[1]
 
     # Create FAISS index (Inner Product for cosine similarity with normalized vectors)
@@ -55,6 +55,7 @@ def add_to_vector_store(repo_id: int, chunks: list[dict], embeddings: np.ndarray
     index_file = _index_path(repo_id)
     meta_file = _metadata_path(repo_id)
 
+    import faiss
     if os.path.exists(index_file) and os.path.exists(meta_file):
         # Load existing
         index = faiss.read_index(index_file)
@@ -84,6 +85,7 @@ def search_vector_store(repo_id: int, query_embedding: np.ndarray, top_k: int = 
     if not os.path.exists(index_file) or not os.path.exists(meta_file):
         return []
 
+    import faiss
     index = faiss.read_index(index_file)
     with open(meta_file, "r", encoding="utf-8") as f:
         metadata = json.load(f)
