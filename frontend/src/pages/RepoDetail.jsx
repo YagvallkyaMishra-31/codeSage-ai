@@ -158,13 +158,14 @@ export default function RepoDetail() {
       )}
 
       {/* ── Stat Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
           { label: 'Total Issues', value: summary?.total_issues || 0, color: '#8b5cf6' },
           { label: 'Critical', value: summary?.severity_breakdown?.critical || 0, color: '#ef4444' },
           { label: 'High', value: summary?.severity_breakdown?.high || 0, color: '#f97316' },
-          { label: 'Bugs', value: summary?.type_breakdown?.bug || 0, color: '#f59e0b' },
+          { label: 'Bugs', value: summary?.bug_count || summary?.type_breakdown?.bug || 0, color: '#f59e0b' },
           { label: 'Security', value: summary?.type_breakdown?.security || 0, color: '#ef4444' },
+          { label: 'Improvements', value: summary?.improvement_count || summary?.type_breakdown?.improvement || 0, color: '#10b981' },
         ].map(s => (
           <div key={s.label} style={{
             background: 'var(--color-bg-card)', border: '1px solid var(--color-border)',
@@ -287,12 +288,28 @@ export default function RepoDetail() {
                   <>
                     <Loader2 style={{ width: '28px', height: '28px', color: 'var(--color-accent)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
                     <p style={{ fontSize: '14px', fontWeight: 500 }}>🔍 AI is deeply analyzing your repository...</p>
-                    <p style={{ fontSize: '12px', marginTop: '4px' }}>This can take 1-3 minutes for large codebases</p>
+                    <p style={{ fontSize: '12px', marginTop: '4px' }}>Running 3-phase analysis: bug detection → improvements → architecture review</p>
+                    <p style={{ fontSize: '11px', marginTop: '2px', opacity: 0.7 }}>This can take 1-3 minutes for large codebases</p>
                   </>
                 ) : summary?.analysis_status === 'analyzed' ? (
                   <>
-                    <p style={{ fontSize: '16px', fontWeight: 600, color: '#10b981' }}>✅ No critical issues found</p>
-                    <p style={{ fontSize: '13px', marginTop: '6px' }}>Your code passed the AI's strict analysis. Try clearing filters to see all findings.</p>
+                    <p style={{ fontSize: '16px', fontWeight: 600, color: '#10b981' }}>✅ No critical bugs found</p>
+                    {(summary?.improvement_count > 0 || summary?.type_breakdown?.improvement > 0) ? (
+                      <p style={{ fontSize: '13px', marginTop: '8px', color: '#f59e0b' }}>
+                        💡 However, I found {summary?.improvement_count || summary?.type_breakdown?.improvement || 0} improvements to strengthen your code
+                      </p>
+                    ) : null}
+                    <p style={{ fontSize: '12px', marginTop: '6px', opacity: 0.7 }}>
+                      {(severityFilter || selectedFile)
+                        ? 'Try clearing filters to see all findings.'
+                        : 'Your code passed strict AI analysis. Great work!'
+                      }
+                    </p>
+                  </>
+                ) : summary?.analysis_status === 'failed' ? (
+                  <>
+                    <p style={{ fontSize: '14px', fontWeight: 500, color: '#ef4444' }}>❌ Analysis failed</p>
+                    <p style={{ fontSize: '12px', marginTop: '6px' }}>{summary?.summary_message || 'Please try re-indexing the repository.'}</p>
                   </>
                 ) : (
                   <p style={{ fontSize: '14px' }}>Analysis pending — index the repository to start</p>

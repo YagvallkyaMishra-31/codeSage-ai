@@ -52,7 +52,7 @@ async def generate_response(prompt: str) -> str:
             messages=[{"role": "user", "content": prompt}],
             model=GROQ_MODEL,
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=4096,
         )
         
         content = response.choices[0].message.content

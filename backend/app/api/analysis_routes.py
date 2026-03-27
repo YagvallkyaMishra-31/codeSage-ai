@@ -56,11 +56,21 @@ async def get_repo_issues(
 
         issues = []
         for row in rows:
+            issue_type = row[3]
+            # Infer analysis phase from issue characteristics
+            file_path = row[2]
+            if file_path == "architecture":
+                analysis_phase = "architecture"
+            elif issue_type in ("improvement", "code_smell") and row[4] in ("low", "medium"):
+                analysis_phase = "improvement"
+            else:
+                analysis_phase = "strict"
+
             issues.append({
                 "id": row[0],
                 "repo_id": row[1],
-                "file_path": row[2],
-                "issue_type": row[3],
+                "file_path": file_path,
+                "issue_type": issue_type,
                 "severity": row[4],
                 "title": row[5],
                 "description": row[6],
@@ -69,8 +79,10 @@ async def get_repo_issues(
                 "line_end": row[9],
                 "confidence_score": row[10],
                 "is_false_positive": bool(row[11]),
+                "issue_hash": row[12],
                 "status": row[13],
                 "created_at": row[14],
+                "analysis_phase": analysis_phase,
             })
 
         # Get total count
@@ -186,6 +198,8 @@ async def get_repo_summary(repo_id: int):
                      for row in await hotspot_cursor.fetchall()]
 
         total_issues = sum(severity_counts.values())
+        bug_count = type_counts.get("bug", 0) + type_counts.get("security", 0)
+        improvement_count = type_counts.get("improvement", 0) + type_counts.get("code_smell", 0)
 
         return {
             "repo_id": repo_id,
@@ -197,6 +211,8 @@ async def get_repo_summary(repo_id: int):
             "total_files": repo[5],
             "languages": repo[6],
             "total_issues": total_issues,
+            "bug_count": bug_count,
+            "improvement_count": improvement_count,
             "severity_breakdown": {
                 "critical": severity_counts.get("critical", 0),
                 "high": severity_counts.get("high", 0),

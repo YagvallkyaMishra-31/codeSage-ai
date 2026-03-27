@@ -66,6 +66,18 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS file_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repo_id INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id),
+                UNIQUE(repo_id, file_path)
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS code_graphs (
                 repo_id INTEGER PRIMARY KEY,
                 graph_data TEXT NOT NULL,
@@ -82,9 +94,12 @@ async def init_db():
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 fix_suggestion TEXT,
+                impact TEXT,
+                why_it_matters TEXT,
                 line_start INTEGER,
                 line_end INTEGER,
                 confidence_score REAL DEFAULT 0.8,
+                priority_score REAL DEFAULT 0.0,
                 is_false_positive INTEGER DEFAULT 0,
                 issue_hash TEXT UNIQUE,
                 status TEXT DEFAULT 'open',
@@ -98,6 +113,9 @@ async def init_db():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_issues_severity ON code_issues(repo_id, severity)
         """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_issues_priority ON code_issues(repo_id, priority_score DESC)
+        """)
         # Add analysis columns to repositories if they don't exist
         try:
             await db.execute("ALTER TABLE repositories ADD COLUMN analysis_status TEXT DEFAULT 'pending'")
@@ -107,6 +125,25 @@ async def init_db():
             await db.execute("ALTER TABLE repositories ADD COLUMN summary_message TEXT DEFAULT ''")
         except Exception:
             pass  # Column already exists
+        try:
+            await db.execute("ALTER TABLE repositories ADD COLUMN health_score INTEGER DEFAULT 100")
+        except Exception:
+            pass  # Column already exists
+            
+        # Add new columns to code_issues if they don't exist (migrations for existing dbs)
+        try:
+            await db.execute("ALTER TABLE code_issues ADD COLUMN impact TEXT")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE code_issues ADD COLUMN why_it_matters TEXT")
+        except Exception:
+            pass
+        try:
+            await db.execute("ALTER TABLE code_issues ADD COLUMN priority_score REAL DEFAULT 0.0")
+        except Exception:
+            pass
+            
         await db.commit()
 
 
