@@ -14,7 +14,7 @@ from app.rag.chunking import chunk_code
 from app.rag.embeddings import generate_embeddings_batch
 from app.rag.vector_store import add_to_vector_store
 from app.services.code_graph_service import build_code_graph
-from app.services.analysis_service import run_analysis_pipeline
+from app.services.analysis_service import safe_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,8 @@ async def run_indexing_pipeline(repo_id: int, local_path: str):
             # Insert file metadata
             cursor = await db.execute(
                 """INSERT INTO file_metadata (repo_id, file_name, file_path, language, size_bytes, line_count)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   RETURNING id""",
                 (repo_id, file_info["file_name"], file_info["file_path"],
                  file_info["language"], file_info["size_bytes"], file_info["line_count"])
             )
@@ -122,8 +123,9 @@ async def run_indexing_pipeline(repo_id: int, local_path: str):
             
             # Upsert into code_graphs table
             await db.execute(
-                """INSERT OR REPLACE INTO code_graphs (repo_id, graph_data) 
-                   VALUES (?, ?)""",
+                """INSERT INTO code_graphs (repo_id, graph_data) 
+                   VALUES (?, ?)
+                   ON CONFLICT (repo_id) DO UPDATE SET graph_data = EXCLUDED.graph_data""",
                 (repo_id, json.dumps(graph_data))
             )
             await db.commit()
@@ -140,7 +142,7 @@ async def run_indexing_pipeline(repo_id: int, local_path: str):
 
         # ── Step 6: Trigger AI Analysis Pipeline ──
         logger.info("Launching autonomous AI analysis for repo_id=%d", repo_id)
-        asyncio.create_task(run_analysis_pipeline(repo_id))
+        asyncio.create_task(safe_analysis(repo_id))
 
     except Exception as e:
         logger.error("Indexing pipeline FAILED for repo_id=%d: %s", repo_id, e)

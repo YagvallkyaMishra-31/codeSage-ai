@@ -1,0 +1,198 @@
+﻿.\venv\Scripts\python.
+exe : INFO:     
+Started server 
+process [2300]
+At line:1 char:1
++ .\venv\Scripts\pytho
+n.exe -m uvicorn 
+app.main:app > 
+backend_crash.log ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (INFO:        
+ Started server pr    
+ocess [2300]:Stri    
+ng) [], RemoteExc    
+eption
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+INFO:     Waiting for 
+application startup.
+20:05:29 | INFO    | 
+app.main | Database 
+initialized 
+successfully
+INFO:     Application 
+startup complete.
+INFO:     Uvicorn 
+running on 
+http://127.0.0.1:8000 
+(Press CTRL+C to quit)
+INFO:     127.0.0.1:56228 - "POST /api/repository/connect HTTP/1.1" 409 Conflict
+20:06:29 | INFO    | a
+pp.services.repo_servi
+ce | Connecting 
+repository: https://gi
+thub.com/YagvallkyaMis
+hra-31/HireFlow
+20:06:29 | INFO    | a
+pp.services.git_servic
+e | Removing existing 
+clone at 
+C:\Users\Yash Mishra\O
+neDrive\Desktop\codeSa
+ge-ai\backend\repos\Hi
+reFlow
+20:06:29 | INFO    | a
+pp.services.git_servic
+e | Cloning https://gi
+thub.com/YagvallkyaMis
+hra-31/HireFlow 
+\u2192 C:\Users\Yash M
+ishra\OneDrive\Desktop
+\codeSage-ai\backend\r
+epos\HireFlow
+20:06:31 | INFO    | a
+pp.services.git_servic
+e | Clone complete: 
+HireFlow
+20:06:31 | INFO    | a
+pp.services.repo_servi
+ce | Repository 
+record created: id=2, 
+name=HireFlow
+20:06:31 | INFO    | 
+app.api.repo_routes | 
+Repository connected: 
+https://github.com/Yag
+vallkyaMishra-31/HireF
+low
+INFO:     127.0.0.1:56242 - "POST /api/repository/connect HTTP/1.1" 200 OK
+20:06:31 | INFO    | a
+pp.services.indexing_s
+ervice | Indexing 
+pipeline started for 
+repo_id=2, 
+path=C:\Users\Yash Mis
+hra\OneDrive\Desktop\c
+odeSage-ai\backend\rep
+os\HireFlow
+20:06:32 | ERROR   | a
+pp.services.indexing_s
+ervice | Indexing 
+pipeline FAILED for 
+repo_id=2: 'charmap' 
+codec can't encode 
+character 
+'\U0001f504' in 
+position 0: character 
+maps to <undefined>
+20:06:32 | ERROR   | 
+asyncio | Task 
+exception was never 
+retrieved
+future: <Task 
+finished 
+name='Task-9' coro=<ru
+n_indexing_pipeline() 
+done, defined at 
+C:\Users\Yash Mishra\O
+neDrive\Desktop\codeSa
+ge-ai\backend\app\serv
+ices\indexing_service.
+py:22> exception=Unico
+deEncodeError('charmap
+', '\U0001f504 
+Loading embedding 
+model (all-MiniLM-L6-v
+2)...', 0, 1, 
+'character maps to 
+<undefined>')>
+Traceback (most 
+recent call last):
+  File "C:\Users\Yash 
+Mishra\OneDrive\Deskto
+p\codeSage-ai\backend\
+app\services\indexing_
+service.py", line 
+152, in 
+run_indexing_pipeline
+    raise e
+  File "C:\Users\Yash 
+Mishra\OneDrive\Deskto
+p\codeSage-ai\backend\
+app\services\indexing_
+service.py", line 
+116, in 
+run_indexing_pipeline
+    await _embed_and_s
+tore_batch(repo_id, 
+batch_chunks, 
+batch_meta)
+  File "C:\Users\Yash 
+Mishra\OneDrive\Deskto
+p\codeSage-ai\backend\
+app\services\indexing_
+service.py", line 
+160, in 
+_embed_and_store_batch
+    embeddings = 
+await loop.run_in_exec
+utor(None, generate_em
+beddings_batch, texts)
+                 ^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
+  File "C:\Python313\L
+ib\concurrent\futures\
+thread.py", line 59, 
+in run
+    result = 
+self.fn(*self.args, 
+**self.kwargs)
+  File "C:\Users\Yash 
+Mishra\OneDrive\Deskto
+p\codeSage-ai\backend\
+app\rag\embeddings.py"
+, line 29, in generate
+_embeddings_batch
+    model = 
+_get_model()
+  File "C:\Users\Yash 
+Mishra\OneDrive\Deskto
+p\codeSage-ai\backend\
+app\rag\embeddings.py"
+, line 14, in 
+_get_model
+    print("\U0001f504 
+Loading embedding 
+model (all-MiniLM-L6-v
+2)...")
+    ~~~~~^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
+  File "C:\Python313\L
+ib\encodings\cp1252.py
+", line 19, in encode
+    return codecs.char
+map_encode(input,self.
+errors,encoding_table)
+[0]
+           ~~~~~~~~~~~
+~~~~~~~~~~^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 
+'charmap' codec can't 
+encode character 
+'\U0001f504' in 
+position 0: character 
+maps to <undefined>
+INFO:     127.0.0.1:56250 - "GET /api/repository/2/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56260 - "GET /api/repository/2/status HTTP/1.1" 200 OK

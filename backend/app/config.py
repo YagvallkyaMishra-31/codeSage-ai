@@ -1,5 +1,9 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env BEFORE any os.getenv() calls
+load_dotenv()
 
 # ── Paths ──
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,6 +16,7 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # ── Dynamic Environment Variables ──
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 # Parse CORS origins from a comma-separated string
 raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")

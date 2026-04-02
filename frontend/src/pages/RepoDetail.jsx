@@ -39,6 +39,7 @@ export default function RepoDetail() {
   const [severityFilter, setSeverityFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [issuesLoading, setIssuesLoading] = useState(false)
+  const [groupByCategory, setGroupByCategory] = useState(true)
 
   // Fetch summary and files on mount
   useEffect(() => {
@@ -157,9 +158,35 @@ export default function RepoDetail() {
         </div>
       )}
 
+      {/* ── Deep Insights Panel ── */}
+      {summary?.top_insights && summary.top_insights.length > 0 && (
+        <div style={{
+          background: 'var(--color-bg-card)', border: '1px solid var(--color-border)',
+          borderRadius: '12px', padding: '16px 20px', marginBottom: '20px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--color-text-primary)' }}>
+            <Brain style={{ width: '18px', height: '18px', color: '#8b5cf6' }} /> Deep Insights
+          </h2>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {summary.top_insights.map((insight, idx) => (
+              <div key={idx} style={{ padding: '12px', background: 'var(--color-bg-elevated)', borderRadius: '8px', borderLeft: '3px solid #8b5cf6' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '4px' }}>{insight.title}</h3>
+                <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>{insight.description}</p>
+                <div style={{ marginTop: '8px', display: 'flex', gap: '12px', fontSize: '12px' }}>
+                  <span style={{ color: '#ef4444' }}><strong>Impact:</strong> {insight.impact}</span>
+                  <span style={{ color: '#f59e0b' }}><strong>Risk:</strong> {insight.why_it_matters}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Stat Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
+          { label: 'Code Health', value: `${summary?.health_score || 0}/100`, color: summary?.health_score > 80 ? '#10b981' : (summary?.health_score > 50 ? '#f59e0b' : '#ef4444') },
           { label: 'Total Issues', value: summary?.total_issues || 0, color: '#8b5cf6' },
           { label: 'Critical', value: summary?.severity_breakdown?.critical || 0, color: '#ef4444' },
           { label: 'High', value: summary?.severity_breakdown?.high || 0, color: '#f97316' },
@@ -257,7 +284,20 @@ export default function RepoDetail() {
                 {issues.length}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                onClick={() => setGroupByCategory(!groupByCategory)}
+                style={{
+                  fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px',
+                  border: '1px solid var(--color-border)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                  background: groupByCategory ? 'var(--color-accent)' : 'var(--color-bg-elevated)',
+                  color: groupByCategory ? 'white' : 'var(--color-text-secondary)',
+                  marginRight: '12px', transition: 'all 0.15s',
+                }}
+              >
+                <Filter style={{ width: '12px', height: '12px' }} />
+                Grouped
+              </button>
               {['', 'critical', 'high', 'medium', 'low'].map(sev => (
                 <button
                   key={sev}
@@ -316,92 +356,133 @@ export default function RepoDetail() {
                 )}
               </div>
             ) : (
-              issues.map((issue) => {
-                const sev = severityConfig[issue.severity] || severityConfig.medium
-                const TypeIcon = typeIcons[issue.issue_type] || AlertTriangle
-                const isExpanded = expandedIssue === issue.id
+              (() => {
+                const renderIssueCard = (issue) => {
+                  const sev = severityConfig[issue.severity] || severityConfig.medium
+                  const TypeIcon = typeIcons[issue.issue_type] || AlertTriangle
+                  const isExpanded = expandedIssue === issue.id
+                  
+                  let confIcon = '❓'
+                  if (issue.confidence_score >= 0.8) confIcon = '🔥'
+                  else if (issue.confidence_score >= 0.5) confIcon = '⚠️'
 
-                return (
-                  <div
-                    key={issue.id}
-                    onClick={() => setExpandedIssue(isExpanded ? null : issue.id)}
-                    style={{
-                      padding: '12px 14px', borderRadius: '8px', marginBottom: '6px', cursor: 'pointer',
-                      border: `1px solid ${isExpanded ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                      background: isExpanded ? 'rgba(139,92,246,0.04)' : 'var(--color-bg-elevated)',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {/* Issue header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {isExpanded ? (
-                        <ChevronDown style={{ width: '14px', height: '14px', color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                      ) : (
-                        <ChevronRight style={{ width: '14px', height: '14px', color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                      )}
-                      <TypeIcon style={{ width: '14px', height: '14px', color: sev.color, flexShrink: 0 }} strokeWidth={1.5} />
-                      <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
-                        {issue.title}
-                      </span>
-                      <span style={{
-                        fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px',
-                        background: sev.bg, color: sev.color, textTransform: 'uppercase',
-                      }}>
-                        {sev.label}
-                      </span>
-                      <span style={{
-                        fontSize: '10px', fontWeight: 500, padding: '3px 8px', borderRadius: '4px',
-                        background: 'var(--color-bg-card)', color: 'var(--color-text-muted)',
-                      }}>
-                        {issue.issue_type}
-                      </span>
-                      {issue.confidence_score && (
-                        <span style={{
-                          fontSize: '9px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
-                          background: 'rgba(139,92,246,0.1)', color: '#8b5cf6',
-                        }}>
-                          {Math.round(issue.confidence_score * 100)}%
+                  return (
+                    <div
+                      key={issue.id}
+                      onClick={() => setExpandedIssue(isExpanded ? null : issue.id)}
+                      style={{
+                        padding: '12px 14px', borderRadius: '8px', marginBottom: '6px', cursor: 'pointer',
+                        border: `1px solid ${isExpanded ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                        background: isExpanded ? 'rgba(139,92,246,0.04)' : 'var(--color-bg-elevated)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {/* Issue header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {isExpanded ? (
+                          <ChevronDown style={{ width: '14px', height: '14px', color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                        ) : (
+                          <ChevronRight style={{ width: '14px', height: '14px', color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                        )}
+                        <TypeIcon style={{ width: '14px', height: '14px', color: sev.color, flexShrink: 0 }} strokeWidth={1.5} />
+                        <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                          {issue.title}
                         </span>
-                      )}
-                    </div>
-
-                    {/* Expanded content */}
-                    {isExpanded && (
-                      <div style={{ marginTop: '12px', paddingLeft: '38px' }}>
-                        <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', marginBottom: '10px' }}>
-                          📁 {issue.file_path}
-                          {issue.line_start && ` : L${issue.line_start}`}
-                          {issue.line_end && `-${issue.line_end}`}
-                        </p>
-                        <div style={{
-                          padding: '12px', borderRadius: '8px', marginBottom: '10px',
-                          background: 'var(--color-bg-card)', border: '1px solid var(--color-border)',
+                        <span style={{
+                          fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px',
+                          background: sev.bg, color: sev.color, textTransform: 'uppercase',
                         }}>
-                          <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '6px' }}>
-                            Description
+                          {sev.label}
+                        </span>
+                        <span style={{
+                          fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
+                          background: 'rgba(59,130,246,0.1)', color: '#3b82f6',
+                        }}>
+                          ★ {issue.priority_score?.toFixed(1) || '0.0'}
+                        </span>
+                      </div>
+
+                      {/* Expanded content */}
+                      {isExpanded && (
+                        <div style={{ marginTop: '12px', paddingLeft: '38px' }}>
+                          <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', marginBottom: '10px' }}>
+                            📁 {issue.file_path}
+                            {issue.line_start && ` : L${issue.line_start}`}
+                            {issue.line_end && `-${issue.line_end}`}
+                            <span style={{ marginLeft: '12px', color: 'var(--color-text-secondary)', background: 'var(--color-bg-card)', padding: '2px 6px', borderRadius: '4px' }}>
+                              {confIcon} Confidence: {Math.round(issue.confidence_score * 100)}%
+                            </span>
                           </p>
-                          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>
-                            {issue.description}
-                          </p>
-                        </div>
-                        {issue.fix_suggestion && (
+                          
                           <div style={{
-                            padding: '12px', borderRadius: '8px',
-                            background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)',
+                            padding: '12px', borderRadius: '8px', marginBottom: '10px',
+                            background: 'var(--color-bg-card)', border: '1px solid var(--color-border)',
                           }}>
-                            <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: '#10b981', marginBottom: '6px' }}>
-                              💡 Suggested Fix
+                            <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '6px' }}>
+                              Description
                             </p>
-                            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.6', fontFamily: 'var(--font-mono)' }}>
-                              {issue.fix_suggestion}
+                            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>
+                              {issue.description}
                             </p>
                           </div>
-                        )}
-                      </div>
-                    )}
+
+                          {(issue.impact || issue.why_it_matters) && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+                              <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.1)' }}>
+                                <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: '#ef4444', marginBottom: '6px' }}>
+                                  What can go wrong
+                                </p>
+                                <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.5' }}>{issue.impact}</p>
+                              </div>
+                              <div style={{ padding: '12px', borderRadius: '8px', background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.1)' }}>
+                                <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: '#f59e0b', marginBottom: '6px' }}>
+                                  Real-world consequence
+                                </p>
+                                <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.5' }}>{issue.why_it_matters}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {issue.fix_suggestion && (
+                            <div style={{
+                              padding: '12px', borderRadius: '8px',
+                              background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)',
+                            }}>
+                              <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: '#10b981', marginBottom: '6px' }}>
+                                💡 Suggested Fix
+                              </p>
+                              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.6', fontFamily: 'var(--font-mono)' }}>
+                                {issue.fix_suggestion}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                if (!groupByCategory) {
+                  return issues.map(renderIssueCard)
+                }
+
+                // Grouped rendering
+                const grouped = issues.reduce((acc, issue) => {
+                  const cat = issue.category || 'Other'
+                  if (!acc[cat]) acc[cat] = []
+                  acc[cat].push(issue)
+                  return acc
+                }, {})
+
+                return Object.entries(grouped).map(([category, catIssues]) => (
+                  <div key={category} style={{ marginBottom: '16px' }}>
+                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 4px', marginBottom: '8px' }}>
+                      {category} <span style={{ opacity: 0.7, fontWeight: 500 }}>({catIssues.length})</span>
+                    </h4>
+                    {catIssues.map(renderIssueCard)}
                   </div>
-                )
-              })
+                ))
+              })()
             )}
           </div>
         </div>

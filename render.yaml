@@ -1,0 +1,51 @@
+services:
+  # 1. Frontend (Vite React) - Deployed as a Static Site
+  - type: web
+    name: codesage-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    rootDir: frontend
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: codesage-backend
+          envVarKey: RENDER_EXTERNAL_URL
+
+  # 2. Main Backend (FastAPI) - Deployed as a Python Web Service
+  - type: web
+    name: codesage-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: codesage-ai-service
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: LLM_PROVIDER
+        value: groq
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: codesage-frontend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: codesage-frontend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NODE_ENV
+        value: production
+      # Note: GROQ_API_KEY, GITHUB_TOKEN, and DATABASE_URL need to be set manually in Render Dashboard
+
+  # 3. AI Service (FastAPI) - Deployed as a Python Web Service
+  - type: web
+    name: codesage-ai-service
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: ai-service

@@ -25,7 +25,8 @@ async def save_activity(
             """INSERT INTO debug_activity
                (repo_id, error_text, root_cause, explanation, suggested_fix,
                 code_patch, severity, category, file_path)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               RETURNING id""",
             (repo_id, error_text, root_cause, explanation, suggested_fix,
              code_patch, severity, category, file_path)
         )

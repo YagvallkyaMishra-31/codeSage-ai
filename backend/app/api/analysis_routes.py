@@ -12,6 +12,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/repository", tags=["Analysis"])
 
 
+def _categorize_issue(issue_dict: dict) -> str:
+    """Deterministically categorize an issue based on its content."""
+    text = (
+        issue_dict.get("title", "") + " " + 
+        issue_dict.get("description", "") + " " + 
+        issue_dict.get("impact", "")
+    ).lower()
+    
+    if any(k in text for k in ["auth", "login", "jwt", "token", "password", "security", "credential", "bypass"]):
+        return "Authentication & Security"
+    if any(k in text for k in ["db", "database", "sql", "query", "mongo", "prisma", "orm", "connection"]):
+        return "Database & Storage"
+    if any(k in text for k in ["api", "route", "endpoint", "fetch", "request", "response", "cors", "status code"]):
+        return "API & Routing"
+    if issue_dict.get("issue_type") == "performance" or any(k in text for k in ["memory", "slow", "leak", "bottleneck", "optimize"]):
+        return "Performance"
+    return "Code Quality & Patterns"
+
+
 @router.get("/{repo_id}/issues")
 async def get_repo_issues(
     repo_id: int,
@@ -24,7 +43,14 @@ async def get_repo_issues(
     """Get all detected issues for a repository with optional filters."""
     db = await get_db()
     try:
-        query = "SELECT * FROM code_issues WHERE repo_id = ? AND is_false_positive = 0"
+        query = """
+            SELECT id, repo_id, file_path, issue_type, severity, title, 
+                   description, fix_suggestion, impact, why_it_matters, 
+                   line_start, line_end, confidence_score, priority_score, 
+                   is_false_positive, issue_hash, status, created_at 
+            FROM code_issues 
+            WHERE repo_id = ? AND is_false_positive = 0
+        """
         params = [repo_id]
 
         if severity:
@@ -37,15 +63,16 @@ async def get_repo_issues(
             query += " AND file_path = ?"
             params.append(file_path)
 
-        # Order: critical first, then high, medium, low
+        # Order by priority_score first, then severity
         query += """
             ORDER BY
+                priority_score DESC,
                 CASE severity
                     WHEN 'critical' THEN 1
                     WHEN 'high' THEN 2
                     WHEN 'medium' THEN 3
                     WHEN 'low' THEN 4
-                END,
+                END DESC,
                 created_at DESC
             LIMIT ? OFFSET ?
         """
@@ -57,8 +84,9 @@ async def get_repo_issues(
         issues = []
         for row in rows:
             issue_type = row[3]
-            # Infer analysis phase from issue characteristics
             file_path = row[2]
+            
+            # Infer analysis phase from issue characteristics
             if file_path == "architecture":
                 analysis_phase = "architecture"
             elif issue_type in ("improvement", "code_smell") and row[4] in ("low", "medium"):
@@ -66,7 +94,7 @@ async def get_repo_issues(
             else:
                 analysis_phase = "strict"
 
-            issues.append({
+            issue_dict = {
                 "id": row[0],
                 "repo_id": row[1],
                 "file_path": file_path,
@@ -75,15 +103,21 @@ async def get_repo_issues(
                 "title": row[5],
                 "description": row[6],
                 "fix_suggestion": row[7],
-                "line_start": row[8],
-                "line_end": row[9],
-                "confidence_score": row[10],
-                "is_false_positive": bool(row[11]),
-                "issue_hash": row[12],
-                "status": row[13],
-                "created_at": row[14],
+                "impact": row[8],
+                "why_it_matters": row[9],
+                "line_start": row[10],
+                "line_end": row[11],
+                "confidence_score": row[12],
+                "priority_score": row[13],
+                "is_false_positive": bool(row[14]),
+                "issue_hash": row[15],
+                "status": row[16],
+                "created_at": row[17],
                 "analysis_phase": analysis_phase,
-            })
+            }
+            
+            issue_dict["category"] = _categorize_issue(issue_dict)
+            issues.append(issue_dict)
 
         # Get total count
         count_query = "SELECT COUNT(*) FROM code_issues WHERE repo_id = ? AND is_false_positive = 0"
@@ -163,9 +197,9 @@ async def get_repo_summary(repo_id: int):
     """Get aggregated analysis summary for a repository."""
     db = await get_db()
     try:
-        # Get repo info
+        # Get repo info including health_score
         repo_cursor = await db.execute(
-            "SELECT name, url, status, analysis_status, summary_message, total_files, languages FROM repositories WHERE id = ?",
+            "SELECT name, url, status, analysis_status, summary_message, total_files, languages, health_score FROM repositories WHERE id = ?",
             (repo_id,)
         )
         repo = await repo_cursor.fetchone()
@@ -197,9 +231,39 @@ async def get_repo_summary(repo_id: int):
         hotspots = [{"file_path": row[0], "issue_count": row[1]}
                      for row in await hotspot_cursor.fetchall()]
 
+        # Get Top Insights (Architecture patterns)
+        insights_cursor = await db.execute("""
+            SELECT title, description, impact, why_it_matters, priority_score 
+            FROM code_issues 
+            WHERE repo_id = ? AND file_path = 'architecture' AND is_false_positive = 0 
+            ORDER BY priority_score DESC LIMIT 3
+        """, (repo_id,))
+        top_insights = [{
+            "title": row[0], "description": row[1], 
+            "impact": row[2], "why_it_matters": row[3], "priority_score": row[4]
+        } for row in await insights_cursor.fetchall()]
+
         total_issues = sum(severity_counts.values())
         bug_count = type_counts.get("bug", 0) + type_counts.get("security", 0)
         improvement_count = type_counts.get("improvement", 0) + type_counts.get("code_smell", 0)
+
+        # Dynamic health score — NEVER fake 100 unless truly clean
+        critical_count = severity_counts.get("critical", 0)
+        high_count = severity_counts.get("high", 0)
+        medium_count = severity_counts.get("medium", 0)
+        
+        if repo[3] == "analyzing":
+            # Still running — don't show a score yet
+            computed_health = None
+        elif total_issues == 0 and repo[3] == "analyzed":
+            # No issues but analysis completed — might be incomplete
+            computed_health = 85
+        else:
+            computed_health = max(0, 100 - (critical_count * 15) - (high_count * 8) - (medium_count * 3) - (bug_count * 5))
+        
+        # Use DB value if explicitly set and non-default, otherwise compute
+        db_health = repo[7]
+        health_score = db_health if (db_health is not None and db_health != 100) else (computed_health or 85)
 
         return {
             "repo_id": repo_id,
@@ -210,6 +274,7 @@ async def get_repo_summary(repo_id: int):
             "summary_message": repo[4],
             "total_files": repo[5],
             "languages": repo[6],
+            "health_score": health_score,
             "total_issues": total_issues,
             "bug_count": bug_count,
             "improvement_count": improvement_count,
@@ -227,6 +292,7 @@ async def get_repo_summary(repo_id: int):
                 "improvement": type_counts.get("improvement", 0),
             },
             "hotspot_files": hotspots,
+            "top_insights": top_insights,
         }
     finally:
         await db.close()

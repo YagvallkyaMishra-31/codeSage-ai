@@ -55,7 +55,8 @@ async def connect_repository(repo_url: str) -> dict:
     try:
         cursor = await db.execute(
             """INSERT INTO repositories (name, url, local_path, status, branches)
-               VALUES (?, ?, ?, 'scanning', ?)""",
+               VALUES (?, ?, ?, 'scanning', ?)
+               RETURNING id""",
             (repo_name, repo_url, local_path, branches)
         )
         await db.commit()

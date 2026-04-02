@@ -5,8 +5,10 @@ Phase 2: Embeddings & Vector Search
 """
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import traceback
 
 # ── Configure structured logging ──
 logging.basicConfig(
@@ -27,7 +29,8 @@ from app.api.analysis_routes import router as analysis_router
 async def lifespan(app: FastAPI):
     """Initialize database on startup."""
     await init_db()
-    print("✅ Database initialized")
+    logger = logging.getLogger(__name__)
+    logger.info("Database initialized successfully")
     yield
 
 
@@ -46,6 +49,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Global Exception Handler ──
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger = logging.getLogger(__name__)
+    logger.error("🚨 Unhandled Global Exception: %s\n%s", str(exc), traceback.format_exc())
+    
+    # Graceful degradation message per requirements
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "detail": "Analysis partially completed. Some components failed, but results are available.",
+            "message": str(exc)
+        }
+    )
 
 # ── Mount routes ──
 app.include_router(repo_router)

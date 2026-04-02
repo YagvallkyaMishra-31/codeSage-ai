@@ -8,13 +8,16 @@ import numpy as np
 _model = None
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 def _get_model():
     global _model
     if _model is None:
-        print("🔄 Loading embedding model (all-MiniLM-L6-v2)...")
+        logger.info("Loading embedding model (all-MiniLM-L6-v2)...")
         from sentence_transformers import SentenceTransformer
         _model = SentenceTransformer("all-MiniLM-L6-v2")
-        print("✅ Embedding model loaded")
+        logger.info("Embedding model loaded successfully")
     return _model
 
 

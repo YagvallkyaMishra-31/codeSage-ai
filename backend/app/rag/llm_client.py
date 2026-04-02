@@ -1,28 +1,25 @@
 """
 LLM client using Groq API for cloud inference.
-Calls Groq with llama3-70b-8192 and handles response parsing.
+Calls Groq with llama-3.3-70b-versatile and handles response parsing.
 """
 import os
 import re
 import json
 import logging
 import asyncio
-from dotenv import load_dotenv
 from groq import AsyncGroq, GroqError
-
-load_dotenv()
+from app.config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
 
-# Enforce GROQ_API_KEY for cloud deployment
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = "llama3-70b-8192"
+# Initialize Async Groq Client — let SDK handle rate limit retries
+groq_client = AsyncGroq(api_key=GROQ_API_KEY, max_retries=3)
+
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 if not GROQ_API_KEY:
     logger.warning("GROQ_API_KEY is not set. LLM features will fail in production.")
 
-# Initialize global AsyncGroq client safely
-groq_client = AsyncGroq(api_key=GROQ_API_KEY if GROQ_API_KEY else "dummy_key_to_prevent_crash")
 
 async def generate_response(prompt: str) -> str:
     """
@@ -39,11 +36,10 @@ async def generate_response(prompt: str) -> str:
     if not current_key:
         raise ValueError("GROQ_API_KEY is missing. Please configure it in the environment variables.")
         
-    # Re-initialize client if the key was updated
+    # Re-initialize client if key changed
     global groq_client
-    if current_key and groq_client.api_key == "dummy_key_to_prevent_crash":
-        # Using max_retries=0 so we handle rate limit backoffs explicitly instead of hanging
-        groq_client = AsyncGroq(api_key=current_key, max_retries=0)
+    if current_key != groq_client.api_key:
+        groq_client = AsyncGroq(api_key=current_key, max_retries=3)
 
     try:
         logger.info("Sending request to Groq SDK (model=%s)", GROQ_MODEL)
@@ -61,8 +57,7 @@ async def generate_response(prompt: str) -> str:
 
     except GroqError as e:
         logger.error("Groq API request failed: %s", str(e))
-        if "429" in str(e) or "rate limit" in str(e).lower():
-            raise RuntimeError("RATE_LIMIT_EXCEEDED")
+        # Don't fast-fail on rate limits — let upstream retry logic handle it
         raise RuntimeError(f"Cloud LLM inference failed: {str(e)}")
     except Exception as e:
         logger.error("Unexpected error during Groq generation: %s", str(e))
