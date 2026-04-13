@@ -3,6 +3,15 @@ CodeSage AI — FastAPI Backend
 Phase 1: Repository Ingestion & Indexing
 Phase 2: Embeddings & Vector Search
 """
+# ── Windows event loop fix for psycopg3 async ──
+import sys
+if sys.platform == "win32":
+    import asyncio
+    import selectors
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsSelectorEventLoopPolicy()
+    )
+
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request

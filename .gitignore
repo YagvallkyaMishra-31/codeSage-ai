@@ -14,10 +14,23 @@ backend/data/
 backend/repos/
 backend/vector_db/
 backend/audit_results.txt
+backend/audit_output.txt
 backend/test_audit.py
 backend/test_fixes.py
 backend/test_repo_indexing_status.py
 backend/run_audit.py
+backend/test_analysis.py
+backend/test_db.py
+backend/test_files.py
+backend/reset_repo.py
+backend/run.py
+backend/run_indexing_test.py
+backend/backend_crash.log
+backend/startup.log
+backend/trace.txt
+backend/out.txt
+backend/*.db
+test_final_logic.py
 
 # IDE
 .vscode/

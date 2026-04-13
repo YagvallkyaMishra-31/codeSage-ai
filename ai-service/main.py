@@ -7,12 +7,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
+import os
 
 app = FastAPI(title="CodeSage AI Service", version="1.0.0")
 
+# Dynamic CORS - allow backend to call this service in production
+raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5000,http://localhost:8000")
+cors_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5000"],
+    allow_origins=cors_origins + ["*"],  # Allow all for inter-service calls on Render
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -108,6 +108,9 @@ class CompatConnection:
     async def commit(self):
         await self._conn.commit()
 
+    async def rollback(self):
+        await self._conn.rollback()
+
     async def close(self):
         await self._conn.close()
 
@@ -116,7 +119,8 @@ async def init_db():
     """Create tables if they don't exist (PostgreSQL-compatible DDL)."""
     logger.info("Initializing PostgreSQL database...")
     conn = await psycopg.AsyncConnection.connect(
-        DATABASE_URL, row_factory=dict_row, autocommit=True
+        DATABASE_URL, row_factory=dict_row, autocommit=True,
+        prepare_threshold=None,  # Disable prepared statement caching for Supabase Pooler
     )
     try:
         await conn.execute("""
@@ -237,6 +241,7 @@ async def init_db():
 async def get_db():
     """Get an async database connection wrapped for compatibility."""
     conn = await psycopg.AsyncConnection.connect(
-        DATABASE_URL, row_factory=dict_row, autocommit=False
+        DATABASE_URL, row_factory=dict_row, autocommit=False,
+        prepare_threshold=None,  # Disable prepared statement caching for Supabase Pooler
     )
     return CompatConnection(conn)

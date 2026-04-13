@@ -99,9 +99,10 @@ async def run_indexing_pipeline(repo_id: int, local_path: str):
                         batch_chunks = []
                         batch_meta = []
 
-            except Exception:
-                pass  # Skip unreadable files
-
+            except Exception as e:
+                logger.error("Failed to index file %s: %s", file_info["file_path"], e)
+                await db.rollback() # VERY IMPORTANT: Rollback Postgres failures
+                continue
             # Update progress
             await db.execute(
                 "UPDATE repositories SET indexed_files = ? WHERE id = ?",
@@ -158,6 +159,5 @@ async def run_indexing_pipeline(repo_id: int, local_path: str):
 
 async def _embed_and_store_batch(repo_id: int, texts: list[str], metadata: list[dict]):
     """Generate embeddings for a batch and store in FAISS."""
-    loop = asyncio.get_event_loop()
-    embeddings = await loop.run_in_executor(None, generate_embeddings_batch, texts)
+    embeddings = generate_embeddings_batch(texts)
     add_to_vector_store(repo_id, metadata, embeddings)

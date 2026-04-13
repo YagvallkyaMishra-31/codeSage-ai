@@ -72,8 +72,13 @@ async def connect_repository(repo_url: str) -> dict:
 
     logger.info("Repository record created: id=%d, name=%s", repo_id, repo_name)
 
-    # Launch background indexing (fire and forget)
-    asyncio.create_task(run_indexing_pipeline(repo_id, local_path))
+    # Launch background indexing with error visibility
+    async def _safe_indexing():
+        try:
+            await run_indexing_pipeline(repo_id, local_path)
+        except Exception as e:
+            logger.error("🔥 INDEXING TASK CRASHED for repo_id=%d: %s", repo_id, e, exc_info=True)
+    asyncio.create_task(_safe_indexing())
 
     return dict(repo)
 
