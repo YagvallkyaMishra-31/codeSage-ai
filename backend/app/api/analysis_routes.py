@@ -3,13 +3,55 @@ Analysis API routes.
 Exposes endpoints for retrieving AI-detected code issues,
 file listings with issue counts, and repo analysis summaries.
 """
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from app.database.db import get_db
+from app.services.analysis_service import safe_analysis
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/repository", tags=["Analysis"])
+
+
+@router.post("/{repo_id}/reanalyze")
+async def reanalyze_repo(repo_id: int):
+    """Re-trigger AI analysis on an already-indexed repository."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id, name, status FROM repositories WHERE id = ?", (repo_id,)
+        )
+        repo = await cursor.fetchone()
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        if repo[2] not in ("completed", "failed"):
+            raise HTTPException(
+                status_code=409,
+                detail="Repository is still being indexed. Wait for indexing to complete."
+            )
+
+        # Reset analysis status
+        await db.execute(
+            "UPDATE repositories SET analysis_status = 'analyzing', summary_message = '', health_score = 100 WHERE id = ?",
+            (repo_id,)
+        )
+        # Clear old issues for fresh analysis
+        await db.execute("DELETE FROM code_issues WHERE repo_id = ?", (repo_id,))
+        await db.commit()
+
+        # Launch analysis in background
+        asyncio.create_task(safe_analysis(repo_id))
+
+        logger.info("Re-analysis triggered for repo_id=%d (%s)", repo_id, repo[1])
+        return {
+            "message": f"Re-analysis started for '{repo[1]}'. Refresh the page to see progress.",
+            "repo_id": repo_id,
+            "analysis_status": "analyzing",
+        }
+    finally:
+        await db.close()
 
 
 def _categorize_issue(issue_dict: dict) -> str:

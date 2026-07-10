@@ -17,20 +17,30 @@ async def semantic_search(query: str, top_k: int = 5, repo_id: int | None = None
         repo_id: Optional repo ID to scope search to a single repo
 
     Returns:
-        List of matching code chunks with scores
+        List of matching code chunks with scores (deduplicated by file)
     """
     # Generate query embedding
     query_embedding = generate_embedding(query)
 
-    # Search
+    # Search — request extra results to allow deduplication
+    raw_top_k = top_k * 3
     if repo_id:
-        results = search_vector_store(repo_id, query_embedding, top_k)
+        results = search_vector_store(repo_id, query_embedding, raw_top_k)
         for r in results:
             r["repo_id"] = repo_id
     else:
-        results = search_all_repos(query_embedding, top_k)
+        results = search_all_repos(query_embedding, raw_top_k)
 
-    return results
+    # Deduplicate: keep highest-scoring chunk per file_path
+    seen_files = {}
+    for r in results:
+        fp = r.get("file_path", "")
+        if fp not in seen_files or r.get("score", 0) > seen_files[fp].get("score", 0):
+            seen_files[fp] = r
+
+    # Sort by score descending and return top_k
+    deduped = sorted(seen_files.values(), key=lambda x: x.get("score", 0), reverse=True)
+    return deduped[:top_k]
 
 
 async def get_graph_context_for_files(repo_id: int, file_paths: list[str]) -> dict:

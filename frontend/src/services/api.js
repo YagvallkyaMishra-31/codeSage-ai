@@ -37,6 +37,12 @@ export const analysisAPI = {
   getIssues: (repoId, params) => api.get(`/repository/${repoId}/issues`, { params }),
   getFiles: (repoId) => api.get(`/repository/${repoId}/files`),
   getSummary: (repoId) => api.get(`/repository/${repoId}/summary`),
+  reanalyze: (repoId) => api.post(`/repository/${repoId}/reanalyze`),
+}
+
+// RAG Chatbot endpoints
+export const chatAPI = {
+  ask: (data) => api.post('/chat/ask', data),
 }
 
 export default api

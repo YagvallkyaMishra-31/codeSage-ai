@@ -195,9 +195,9 @@ export default function RootCauseAnalysis() {
                 }}>
                   <div style={{ textAlign: 'center', maxWidth: '300px' }}>
                     <Search style={{ width: '40px', height: '40px', color: 'var(--color-text-muted)', margin: '0 auto 16px' }} />
-                    <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }}>No Active Analysis</p>
+                    <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '8px' }}>Semantic Code Search</p>
                     <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>
-                      Use the search bar above or submit an issue in the <strong>Debug Assistant</strong> to see results.
+                      Use the search bar above to find code patterns across your indexed repositories, or use <strong>AI Chat</strong> for conversational debugging.
                     </p>
                   </div>
                 </div>

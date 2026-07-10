@@ -4,7 +4,7 @@ import { LayoutDashboard, FolderGit2, Bug, Search, Activity, Settings } from 'lu
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Repositories', icon: FolderGit2, path: '/repositories' },
-  { label: 'Debug Assistant', icon: Bug, path: '/debug' },
+  { label: 'AI Chat', icon: Bug, path: '/debug' },
   { label: 'Analysis', icon: Search, path: '/analysis' },
   { label: 'Activity', icon: Activity, path: '/activity' },
   { label: 'Settings', icon: Settings, path: '/settings' },

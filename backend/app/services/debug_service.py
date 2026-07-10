@@ -1,7 +1,8 @@
 """
 Debug service: orchestrates the RAG pipeline for debugging.
-Retrieves context → builds prompt → calls LLM → returns analysis.
+Retrieves context -> builds prompt -> calls LLM -> returns analysis.
 """
+import asyncio
 import logging
 import time
 from app.services.search_service import semantic_search, get_graph_context_for_files
@@ -10,6 +11,16 @@ from app.rag.llm_client import analyze_debug_issue
 from app.services.activity_service import save_activity
 
 logger = logging.getLogger(__name__)
+
+
+async def _deferred_save_activity(**kwargs):
+    """Save activity after a short delay to let other DB connections close."""
+    await asyncio.sleep(0.5)
+    try:
+        await save_activity(**kwargs)
+        logger.info("Activity record saved (deferred)")
+    except Exception as e:
+        logger.warning("Failed to save activity (deferred): %s", e)
 
 
 async def analyze_issue(error_text: str, repo_id: int | None = None) -> dict:
@@ -52,25 +63,7 @@ async def analyze_issue(error_text: str, repo_id: int | None = None) -> dict:
     elapsed = time.perf_counter() - t0
     logger.info("LLM analysis completed in %.1fs", elapsed)
 
-    # Step 4: Save activity record asynchronously
-    try:
-        primary_file = result.get("related_files", [""])[0] if result.get("related_files") else ""
-        await save_activity(
-            error_text=error_text,
-            root_cause=result.get("root_cause", ""),
-            explanation=result.get("explanation", ""),
-            suggested_fix=result.get("suggested_fix", ""),
-            code_patch=result.get("code_patch", ""),
-            severity=result.get("severity", "medium"),
-            category=result.get("category", "ERROR"),
-            file_path=primary_file,
-            repo_id=repo_id
-        )
-        logger.info("Activity record saved")
-    except Exception as e:
-        logger.warning("Failed to save activity: %s", e)
-
-    # Step 5: Enrich response with retrieved context info
+    # Step 4: Enrich response with retrieved context info
     result["context_used"] = [
         {
             "file_path": c["file_path"],
@@ -82,4 +75,20 @@ async def analyze_issue(error_text: str, repo_id: int | None = None) -> dict:
     
     result["dependency_context"] = graph_context
 
+    # Step 5: Fire-and-forget activity save as background task
+    # Deferred to avoid SQLite lock contention with graph context queries
+    primary_file = result.get("related_files", [""])[0] if result.get("related_files") else ""
+    asyncio.create_task(_deferred_save_activity(
+        error_text=error_text,
+        root_cause=result.get("root_cause", ""),
+        explanation=result.get("explanation", ""),
+        suggested_fix=result.get("suggested_fix", ""),
+        code_patch=result.get("code_patch", ""),
+        severity=result.get("severity", "medium"),
+        category=result.get("category", "ERROR"),
+        file_path=primary_file,
+        repo_id=repo_id,
+    ))
+
     return result
+

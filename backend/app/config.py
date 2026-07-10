@@ -18,6 +18,11 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# ── LLM Provider Configuration ──
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()  # "ollama" or "groq"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+
 # Parse CORS origins from a comma-separated string
 raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
 CORS_ORIGINS = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]

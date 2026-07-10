@@ -32,6 +32,7 @@ from app.api.search_routes import router as search_router
 from app.api.debug_routes import router as debug_router
 from app.api.activity_routes import router as activity_router
 from app.api.analysis_routes import router as analysis_router
+from app.api.chat_routes import router as chat_router
 
 
 @asynccontextmanager
@@ -81,6 +82,7 @@ app.include_router(search_router)
 app.include_router(debug_router)
 app.include_router(activity_router)
 app.include_router(analysis_router)
+app.include_router(chat_router)
 
 
 @app.get("/")

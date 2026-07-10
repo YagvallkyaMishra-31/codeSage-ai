@@ -30,6 +30,10 @@ backend/startup.log
 backend/trace.txt
 backend/out.txt
 backend/*.db
+backend/live_audit.py
+backend/verify_fixes.py
+backend/test_activity.py
+backend/test_db_connection.py
 test_final_logic.py
 
 # IDE

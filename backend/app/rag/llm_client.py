@@ -1,72 +1,145 @@
 """
-LLM client using Groq API for cloud inference.
-Calls Groq with llama-3.3-70b-versatile and handles response parsing.
+LLM client with dual provider support:
+  - Groq (cloud): Uses Groq SDK with llama-3.3-70b-versatile
+  - Ollama (local): Uses HTTP calls to localhost:11434
+
+Provider is selected via LLM_PROVIDER environment variable.
 """
 import os
 import re
 import json
 import logging
 import asyncio
-from groq import AsyncGroq, GroqError
-from app.config import GROQ_API_KEY
+import httpx
+from app.config import GROQ_API_KEY, LLM_PROVIDER, OLLAMA_URL, OLLAMA_MODEL
 
 logger = logging.getLogger(__name__)
 
-# Initialize Async Groq Client — let SDK handle rate limit retries
-groq_client = AsyncGroq(api_key=GROQ_API_KEY, max_retries=3)
-
+# ─────────────────────────────────────────────
+# Groq Cloud Provider
+# ─────────────────────────────────────────────
 GROQ_MODEL = "llama-3.3-70b-versatile"
-
-if not GROQ_API_KEY:
-    logger.warning("GROQ_API_KEY is not set. LLM features will fail in production.")
+_groq_client = None
 
 
-async def generate_response(prompt: str) -> str:
-    """
-    Core function to communicate with Groq LLM API.
-    
-    Args:
-        prompt: Raw prompt text string.
-        
-    Returns:
-        Generated text response from the model.
-    """
-    # Reload key dynamically in case it was added to .env after server start
-    current_key = os.getenv("GROQ_API_KEY")
+def _get_groq_client():
+    """Lazy-initialize the Groq client."""
+    global _groq_client
+    current_key = os.getenv("GROQ_API_KEY") or GROQ_API_KEY
     if not current_key:
-        raise ValueError("GROQ_API_KEY is missing. Please configure it in the environment variables.")
-        
-    # Re-initialize client if key changed
-    global groq_client
-    if current_key != groq_client.api_key:
-        groq_client = AsyncGroq(api_key=current_key, max_retries=3)
+        raise ValueError("GROQ_API_KEY is missing. Please configure it in environment variables.")
+    if _groq_client is None or _groq_client.api_key != current_key:
+        from groq import AsyncGroq
+        _groq_client = AsyncGroq(api_key=current_key, max_retries=3)
+    return _groq_client
 
+
+async def _generate_groq(prompt: str) -> str:
+    """Generate response using Groq Cloud API."""
+    from groq import GroqError
+    client = _get_groq_client()
     try:
         logger.info("Sending request to Groq SDK (model=%s)", GROQ_MODEL)
-        
-        response = await groq_client.chat.completions.create(
+        response = await client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model=GROQ_MODEL,
             temperature=0.2,
             max_tokens=4096,
         )
-        
         content = response.choices[0].message.content
         logger.info("Groq response received (%d chars)", len(content))
         return content
-
     except GroqError as e:
         logger.error("Groq API request failed: %s", str(e))
-        # Don't fast-fail on rate limits — let upstream retry logic handle it
         raise RuntimeError(f"Cloud LLM inference failed: {str(e)}")
-    except Exception as e:
-        logger.error("Unexpected error during Groq generation: %s", str(e))
-        raise
+
+
+# ─────────────────────────────────────────────
+# Ollama Local Provider
+# ─────────────────────────────────────────────
+
+async def _check_ollama_health() -> bool:
+    """Check if Ollama is running at the configured URL."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(OLLAMA_URL)
+            return r.status_code == 200
+    except Exception:
+        return False
+
+
+async def _generate_ollama(prompt: str) -> str:
+    """Generate response using local Ollama instance."""
+    is_alive = await _check_ollama_health()
+    if not is_alive:
+        raise ConnectionError(
+            f"Ollama is not running at {OLLAMA_URL}. "
+            "Start Ollama with 'ollama serve' and try again."
+        )
+
+    url = f"{OLLAMA_URL}/api/generate"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.2,
+            "num_predict": 4096,
+        },
+    }
+
+    logger.info("Sending request to Ollama (model=%s, url=%s)", OLLAMA_MODEL, OLLAMA_URL)
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(url, json=payload)
+
+        if response.status_code != 200:
+            error_detail = response.text[:300]
+            logger.error("Ollama returned HTTP %d: %s", response.status_code, error_detail)
+            raise RuntimeError(f"Ollama error (HTTP {response.status_code}): {error_detail}")
+
+        data = response.json()
+        content = data.get("response", "")
+        if not content:
+            raise RuntimeError("Ollama returned empty response")
+
+        logger.info("Ollama response received (%d chars)", len(content))
+        return content
+
+    except httpx.ConnectError:
+        raise ConnectionError(f"Cannot connect to Ollama at {OLLAMA_URL}")
+    except httpx.TimeoutException:
+        raise RuntimeError("Ollama request timed out (120s)")
+
+
+# ─────────────────────────────────────────────
+# Public API — auto-dispatches to the right provider
+# ─────────────────────────────────────────────
+
+async def generate_response(prompt: str) -> str:
+    """
+    Core function to communicate with the configured LLM provider.
+
+    Uses LLM_PROVIDER env var to select:
+      - "ollama" → local Ollama instance
+      - "groq"   → Groq Cloud API (default)
+
+    Args:
+        prompt: Raw prompt text string.
+    Returns:
+        Generated text response from the model.
+    """
+    provider = os.getenv("LLM_PROVIDER", LLM_PROVIDER).lower()
+
+    if provider == "ollama":
+        return await _generate_ollama(prompt)
+    else:
+        return await _generate_groq(prompt)
 
 
 async def analyze_debug_issue(messages: list[dict]) -> dict:
     """
-    Send formatted messages to Groq and return the parsed JSON response.
+    Send formatted messages to LLM and return the parsed JSON response.
 
     Args:
         messages: Chat-format messages from prompt_builder
@@ -80,13 +153,13 @@ async def analyze_debug_issue(messages: list[dict]) -> dict:
         role = msg["role"].upper()
         content = msg["content"]
         prompt_parts.append(f"### {role}\n{content}\n")
-    
+
     full_prompt = "\n".join(prompt_parts) + "\n### RESPONSE (JSON ONLY)\n"
 
     try:
-        # Generate the raw text response via Groq
+        # Generate the raw text response via configured provider
         content = await generate_response(full_prompt)
-        
+
     except Exception as e:
         raise RuntimeError(f"Analysis failed: {str(e)}")
 

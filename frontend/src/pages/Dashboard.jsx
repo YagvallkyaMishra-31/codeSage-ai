@@ -6,7 +6,7 @@ import {
   ArrowUpRight, Bug, Code2, BarChart3, Loader2
 } from 'lucide-react'
 
-import { repositoryAPI, activityAPI } from '../services/api'
+import { repositoryAPI, activityAPI, analysisAPI } from '../services/api'
 
 const typeConfig = {
   ERROR:        { bg: 'rgba(239,68,68,0.1)',  color: '#ef4444', icon: Bug },
@@ -15,17 +15,28 @@ const typeConfig = {
   FEATURE:      { bg: 'rgba(16,185,129,0.1)',  color: '#10b981', icon: CheckCircle2 },
 }
 
-const healthMetrics = [
-  { label: 'Code Quality', value: 87, color: '#10b981' },
-  { label: 'Test Coverage', value: 72, color: '#3b82f6' },
-  { label: 'Security Score', value: 95, color: '#8b5cf6' },
-  { label: 'Performance', value: 91, color: '#f59e0b' },
-]
+function computeHealthMetrics(repos) {
+  const total = repos.length || 1
+  const completed = repos.filter(r => r.status === 'completed').length
+  const analyzed = repos.filter(r => r.analysis_status === 'analyzed').length
+  const totalFiles = repos.reduce((a, r) => a + (r.total_files || 0), 0)
+  const indexedFiles = repos.reduce((a, r) => a + (r.indexed_files || 0), 0)
+  const coverage = totalFiles > 0 ? Math.round((indexedFiles / totalFiles) * 100) : 0
+  const repoHealth = Math.round((completed / total) * 100)
+  const analysisRate = Math.round((analyzed / total) * 100)
+  return [
+    { label: 'Repo Health', value: repoHealth, color: repoHealth > 70 ? '#10b981' : '#f59e0b' },
+    { label: 'Index Coverage', value: coverage, color: coverage > 70 ? '#3b82f6' : '#f59e0b' },
+    { label: 'Analysis Rate', value: analysisRate, color: analysisRate > 70 ? '#8b5cf6' : '#f59e0b' },
+    { label: 'Completion', value: Math.round((completed / total) * 100), color: '#10b981' },
+  ]
+}
 
 export default function Dashboard() {
   const [repos, setRepos] = useState([])
   const [activities, setActivities] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [totalIssues, setTotalIssues] = useState(0)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,8 +45,19 @@ export default function Dashboard() {
           repositoryAPI.list(),
           activityAPI.getAll({ limit: 5 })
         ])
-        setRepos(repoRes.data.repositories || [])
+        const repoList = repoRes.data.repositories || []
+        setRepos(repoList)
         setActivities(activityRes.data.activities || [])
+
+        // Fetch real issue counts from analyzed repos
+        let issueCount = 0
+        for (const repo of repoList.filter(r => r.status === 'completed')) {
+          try {
+            const sumRes = await analysisAPI.getSummary(repo.id)
+            issueCount += (sumRes.data?.total_issues || 0)
+          } catch { /* skip */ }
+        }
+        setTotalIssues(issueCount)
       } catch (err) {
         console.error('Dashboard fetch error:', err)
       } finally {
@@ -46,10 +68,10 @@ export default function Dashboard() {
   }, [])
 
   const stats = [
-    { label: 'Repositories', value: repos.length.toString(), change: '+1 this week', icon: FolderGit2, color: '#8b5cf6' },
+    { label: 'Repositories', value: repos.length.toString(), change: 'Connected', icon: FolderGit2, color: '#8b5cf6' },
     { label: 'Files Indexed', value: repos.reduce((acc, r) => acc + (r.indexed_files || 0), 0).toLocaleString(), change: 'Real-time', icon: FileCode, color: '#10b981' },
-    { label: 'Issues Found', value: activities.length.toString(), change: 'AI Detected', icon: AlertTriangle, color: '#f59e0b' },
-    { label: 'AI Fixes Ready', value: activities.filter(a => !!a.code_patch).length.toString(), change: 'Click to view', icon: Zap, color: '#3b82f6' },
+    { label: 'Issues Found', value: totalIssues.toString(), change: 'AI Detected', icon: AlertTriangle, color: '#f59e0b' },
+    { label: 'Repos Analyzed', value: repos.filter(r => r.analysis_status === 'analyzed').length.toString(), change: 'Complete', icon: Zap, color: '#3b82f6' },
   ]
 
   if (isLoading) {
@@ -209,7 +231,7 @@ export default function Dashboard() {
                <BarChart3 style={{ width: '16px', height: '16px', color: '#8b5cf6' }} />
                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)' }}>System Health</h3>
             </div>
-            {healthMetrics.map((m) => (
+            {computeHealthMetrics(repos).map((m) => (
               <div key={m.label} style={{ marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{m.label}</span>
@@ -226,7 +248,7 @@ export default function Dashboard() {
             <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '16px' }}>Quick Actions</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {[
-                { to: '/debug', label: 'Debug Assistant', icon: Search, color: '#8b5cf6' },
+                { to: '/debug', label: 'AI Chat', icon: Search, color: '#8b5cf6' },
                 { to: '/repositories', label: 'Connect Repository', icon: GitBranch, color: '#10b981' },
                 { to: '/activity', label: 'View Activity', icon: Activity, color: '#3b82f6' },
                 { to: '/analysis', label: 'Root Cause Analysis', icon: Shield, color: '#f59e0b' },

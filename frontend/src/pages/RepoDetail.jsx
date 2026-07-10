@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, FileCode, AlertTriangle, Shield, Zap, Bug, Lightbulb,
@@ -40,27 +40,69 @@ export default function RepoDetail() {
   const [loading, setLoading] = useState(true)
   const [issuesLoading, setIssuesLoading] = useState(false)
   const [groupByCategory, setGroupByCategory] = useState(true)
+  const [reanalyzing, setReanalyzing] = useState(false)
+  const pollRef = useRef(null)
 
-  // Fetch summary and files on mount
+  // Load all data
+  const loadData = useCallback(async () => {
+    try {
+      const [sumRes, filesRes, issuesRes] = await Promise.all([
+        analysisAPI.getSummary(id),
+        analysisAPI.getFiles(id),
+        analysisAPI.getIssues(id, {}),
+      ])
+      setSummary(sumRes.data)
+      setFiles(filesRes.data.files || [])
+      setIssues(issuesRes.data.issues || [])
+      return sumRes.data
+    } catch (err) {
+      console.error('Failed to load repo details:', err)
+      return null
+    }
+  }, [id])
+
+  // Handle re-analyze
+  const handleReanalyze = async () => {
+    try {
+      setReanalyzing(true)
+      await analysisAPI.reanalyze(id)
+      // Start polling for progress
+      const sumData = await loadData()
+      if (sumData?.analysis_status === 'analyzing') {
+        startPolling()
+      }
+    } catch (err) {
+      console.error('Re-analyze failed:', err)
+      alert(err.response?.data?.detail || 'Failed to start re-analysis')
+      setReanalyzing(false)
+    }
+  }
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      const data = await loadData()
+      if (data && data.analysis_status !== 'analyzing') {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+        setReanalyzing(false)
+      }
+    }, 3000)
+  }, [loadData])
+
+  // Fetch on mount
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [sumRes, filesRes, issuesRes] = await Promise.all([
-          analysisAPI.getSummary(id),
-          analysisAPI.getFiles(id),
-          analysisAPI.getIssues(id, {}),
-        ])
-        setSummary(sumRes.data)
-        setFiles(filesRes.data.files || [])
-        setIssues(issuesRes.data.issues || [])
-      } catch (err) {
-        console.error('Failed to load repo details:', err)
-      } finally {
-        setLoading(false)
+    const init = async () => {
+      const data = await loadData()
+      setLoading(false)
+      if (data?.analysis_status === 'analyzing') {
+        setReanalyzing(true)
+        startPolling()
       }
     }
-    load()
-  }, [id])
+    init()
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [id, loadData, startPolling])
 
   // Fetch issues when file or severity filter changes
   useEffect(() => {
@@ -114,15 +156,33 @@ export default function RepoDetail() {
               {summary?.url}
             </p>
           </div>
-          {isAnalyzing && (
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600,
-              padding: '6px 14px', borderRadius: '8px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
-            }}>
-              <Loader2 style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} />
-              AI Analyzing...
-            </span>
-          )}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {isAnalyzing ? (
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600,
+                padding: '6px 14px', borderRadius: '8px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
+              }}>
+                <Loader2 style={{ width: '14px', height: '14px', animation: 'spin 1s linear infinite' }} />
+                AI Analyzing...
+              </span>
+            ) : (
+              <button
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600,
+                  padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--color-border)',
+                  background: reanalyzing ? 'var(--color-bg-elevated)' : 'var(--color-accent)',
+                  color: reanalyzing ? 'var(--color-text-muted)' : 'white',
+                  cursor: reanalyzing ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                  boxShadow: reanalyzing ? 'none' : '0 2px 8px rgba(139,92,246,0.3)',
+                }}
+              >
+                <RefreshCw style={{ width: '14px', height: '14px', animation: reanalyzing ? 'spin 1s linear infinite' : 'none' }} />
+                {reanalyzing ? 'Analyzing...' : 'Re-analyze'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
